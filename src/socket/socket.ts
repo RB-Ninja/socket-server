@@ -1,4 +1,3 @@
-
 import { Server, Socket } from "socket.io";
 import http from "http";
 import express from "express";
@@ -13,37 +12,52 @@ const io = new Server(server, {
   },
 });
 
+interface User {
+  socketId: string;
+  userName: string;
+}
+
 interface UserSocketMap {
-  [userId: string]: string;
+  [userId: string]: User;
 }
 
 const userSocketMap: UserSocketMap = {};
 const userStatusMap: { [userId: string]: boolean } = {}; // { userId: inCall: boolean }
 
 const getReceiverSocketId = (receiverId: string): string | undefined => {
-  return userSocketMap[receiverId];
+  return userSocketMap[receiverId]?.socketId;
 };
 
 io.on("connection", (socket: Socket) => {
   const userId: string | undefined = socket.handshake.query.userId as
     | string
     | undefined;
+  const userName: string | undefined = socket.handshake.query.userName as
+    | string
+    | undefined;
 
-  if (userId) {
-    userSocketMap[userId] = socket.id;
+  if (userId && userName) {
+    userSocketMap[userId] = { socketId: socket.id, userName };
     userStatusMap[userId] = false; // User is not in a call initially
-    console.log(`User connected: ${userId}, Socket ID: ${socket.id}`);
+    console.log(`User connected: ${userId} (${userName}), Socket ID: ${socket.id}`);
 
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    // Broadcast the list of online users, including their names
+    io.emit("getOnlineUsers", Object.keys(userSocketMap).map(id => ({
+      userId: id,
+      userName: userSocketMap[id].userName
+    })));
   } else {
-    console.log("User connected without userId");
+    console.log("User connected without userId or userName");
   }
 
   socket.on("disconnect", () => {
     if (userId) {
       delete userSocketMap[userId];
       delete userStatusMap[userId];
-      io.emit("getOnlineUsers", Object.keys(userSocketMap));
+      io.emit("getOnlineUsers", Object.keys(userSocketMap).map(id => ({
+        userId: id,
+        userName: userSocketMap[id].userName
+      })));
       console.log(`User disconnected: ${userId}`);
     }
   });
