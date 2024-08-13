@@ -12,52 +12,37 @@ const io = new Server(server, {
   },
 });
 
-interface User {
-  socketId: string;
-  userName: string;
-}
-
 interface UserSocketMap {
-  [userId: string]: User;
+  [userId: string]: string;
 }
 
 const userSocketMap: UserSocketMap = {};
 const userStatusMap: { [userId: string]: boolean } = {}; // { userId: inCall: boolean }
 
 const getReceiverSocketId = (receiverId: string): string | undefined => {
-  return userSocketMap[receiverId]?.socketId;
+  return userSocketMap[receiverId];
 };
 
 io.on("connection", (socket: Socket) => {
   const userId: string | undefined = socket.handshake.query.userId as
     | string
     | undefined;
-  const userName: string | undefined = socket.handshake.query.userName as
-    | string
-    | undefined;
 
-  if (userId && userName) {
-    userSocketMap[userId] = { socketId: socket.id, userName };
+  if (userId) {
+    userSocketMap[userId] = socket.id;
     userStatusMap[userId] = false; // User is not in a call initially
-    console.log(`User connected: ${userId} (${userName}), Socket ID: ${socket.id}`);
+    console.log(`User connected: ${userId}, Socket ID: ${socket.id}`);
 
-    // Broadcast the list of online users, including their names
-    io.emit("getOnlineUsers", Object.keys(userSocketMap).map(id => ({
-      userId: id,
-      userName: userSocketMap[id].userName
-    })));
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
   } else {
-    console.log("User connected without userId or userName");
+    console.log("User connected without userId");
   }
 
   socket.on("disconnect", () => {
     if (userId) {
       delete userSocketMap[userId];
       delete userStatusMap[userId];
-      io.emit("getOnlineUsers", Object.keys(userSocketMap).map(id => ({
-        userId: id,
-        userName: userSocketMap[id].userName
-      })));
+      io.emit("getOnlineUsers", Object.keys(userSocketMap));
       console.log(`User disconnected: ${userId}`);
     }
   });
